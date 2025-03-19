@@ -2,10 +2,10 @@
   "name": "github-discord-bot",
   "version": "1.0.0",
   "description": "Discord bot for GitHub PR status updates",
-  "main": "dist/index.js",
+  "main": "dist/discord-bot.js",
   "scripts": {
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "start": "node dist/discord-bot.js",
+    "dev": "ts-node src/discord-bot.ts",
     "build": "tsc",
     "setup": "ts-node src/github-app-setup.ts",
     "lint": "eslint . --ext .ts"
