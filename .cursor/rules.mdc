@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
 You are an expert in discord app development and github app developments.
 Keep the code elegant and readable, also easy to test if not at the cost of readability..
 

@@ -1,10 +1,11 @@
 // File: src/index.ts
 import { 
   Client, 
-  GatewayIntentBits, 
+  GatewayIntentBits,
   ChannelType,
   ThreadChannel,
-  TextChannel
+  TextChannel,
+  Events
 } from 'discord.js';
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -82,7 +83,7 @@ app.use(bodyParser.json());
 const prThreads: Map<number, PRThreadInfo> = new Map();
 
 // Discord bot ready event
-client.once('ready', () => {
+client.once(Events.ClientReady, () => {
   console.log(`Bot logged in as ${client.user?.tag}`);
 });
 
@@ -147,68 +148,72 @@ async function updatePrThread(pr: PullRequest, action: string): Promise<ThreadCh
   }
   
   try {
-    const thread = await client.channels.threads.fetch(prData.threadId);
-    if (!thread) {
-      console.error(`Thread ${prData.threadId} not found`);
+    const channel = await client.channels.fetch(prData.threadId);
+    if (!channel || !(channel instanceof ThreadChannel)) {
+      console.error(`Thread ${prData.threadId} not found or is not a thread channel`);
       return null;
     }
+
+    const handleReviewSubmission = async () => {
+      const review = pr.review;
+      if (!review) {
+        console.error('Review object is missing');
+        return;
+      }
+      
+      let reviewMessage = `Review submitted by ${review.user.login}: `;
+      
+      switch (review.state) {
+        case 'approved':
+          reviewMessage += '✅ Approved';
+          break;
+        case 'changes_requested':
+          reviewMessage += '🔄 Changes requested';
+          break;
+        case 'commented':
+          reviewMessage += '💬 Commented';
+          break;
+        default:
+          reviewMessage += review.state;
+      }
+      
+      if (review.body) {
+        reviewMessage += `\n\n> ${review.body}`;
+      }
+      
+      await channel.send(reviewMessage);
+    };
     
     switch (action) {
       case 'closed':
         if (pr.merged) {
-          await thread.send(`PR #${pr.number} was merged by ${pr.merged_by?.login || 'unknown'} 🎉`);
+          await channel.send(`PR #${pr.number} was merged by ${pr.merged_by?.login || 'unknown'} 🎉`);
         } else {
-          await thread.send(`PR #${pr.number} was closed without merging by ${pr.closed_by?.login || 'unknown'} ❌`);
+          await channel.send(`PR #${pr.number} was closed without merging by ${pr.closed_by?.login || 'unknown'} ❌`);
         }
-        await thread.setArchived(true);
+        await channel.setArchived(true);
         break;
         
       case 'reopened':
-        await thread.setArchived(false);
-        await thread.send(`PR #${pr.number} was reopened by ${pr.user.login} 🔄`);
+        await channel.setArchived(false);
+        await channel.send(`PR #${pr.number} was reopened by ${pr.user.login} 🔄`);
         break;
         
       case 'synchronize':
-        await thread.send(`PR #${pr.number} was updated with new commits 📝`);
+        await channel.send(`PR #${pr.number} was updated with new commits 📝`);
         break;
         
       case 'review_requested':
-        await thread.send(`Review requested for PR #${pr.number} from ${pr.requested_reviewer?.login || 'reviewers'} 👀`);
+        await channel.send(`Review requested for PR #${pr.number} from ${pr.requested_reviewer?.login || 'reviewers'} 👀`);
         break;
         
       case 'review_submitted':
-        const review = pr.review;
-        if (!review) {
-          console.error('Review object is missing');
-          return thread;
-        }
-        
-        let message = `Review submitted by ${review.user.login}: `;
-        
-        switch (review.state) {
-          case 'approved':
-            message += '✅ Approved';
-            break;
-          case 'changes_requested':
-            message += '🔄 Changes requested';
-            break;
-          case 'commented':
-            message += '💬 Commented';
-            break;
-          default:
-            message += review.state;
-        }
-        
-        if (review.body) {
-          message += `\n\n> ${review.body}`;
-        }
-        
-        await thread.send(message);
+        await handleReviewSubmission();
         break;
     }
     
     console.log(`Updated thread for PR #${pr.number} with action: ${action}`);
-    return thread;
+    return channel;
   } catch (error) {
     console.error(`Error updating thread for PR #${pr.number}:`, error);
     return null;
